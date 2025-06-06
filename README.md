@@ -19,12 +19,9 @@ This is a basic project using **PySide6** (Qt for Python) to build a desktop GUI
 First, make sure you have Python installed. Then install the required dependency:
 
 
-<p>
 ```bash
 pip install PySide6
-
-</p>
-
+```
 
 ## 📁 Project Structure & Description
 
@@ -71,5 +68,6 @@ This means:
 - However, **you will not be able to execute any real calibration or robotic arm control**, unless you have access to the proprietary backend implementation.
 
 ---
+
 
 
