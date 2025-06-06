@@ -1,0 +1,2 @@
+# GUI-Development-for-Multi-sensor-Calibration-on-Drones
+This repository contains the PyQt-based graphical user interface (GUI) for a multi-sensor calibration system. It is designed to interact with a ROS 2 backend, which handles the calibration logic and remains part of a private project. The goal here is to create a user-friendly interface for visualizing and managing sensor calibration workflows.
