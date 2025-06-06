@@ -19,11 +19,11 @@ This is a basic project using **PySide6** (Qt for Python) to build a desktop GUI
 First, make sure you have Python installed. Then install the required dependency:
 
 
-<pre>
+<p>
 ```bash
 pip install PySide6
 
-</pre>
+</p>
 
 
 ## 📁 Project Structure & Description
