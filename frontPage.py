@@ -1,14 +1,14 @@
-from PySide6.QtWidgets import QMainWindow, QMenu,QWidget, QMessageBox, QLineEdit, QInputDialog
-
-from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMainWindow, QMenu,QWidget, QMessageBox, QLineEdit, QInputDialog, QTextEdit, QVBoxLayout,  QDialog
 
 
+from PySide6.QtCore import QTimer
 from ui_pro import Ui_MainWindow
 from connect_arm_widget import Ui_Form
 import os
 import  sys
 import subprocess
 import re
+
 
 
 
@@ -41,7 +41,16 @@ class ConnectArmWidget(QWidget):
         self.ui.calibrateBtn.clicked.connect(self.calibrate)
         self.ui.launchdriverBtn.clicked.connect(self.driver)
         self.ui.launchmoveitBtn_2.clicked.connect(self.moveit)
+
+
         # Map UI buttons to actions
+
+        # Map UI buttons to actions
+        self.ui.congigureBtn.clicked.connect(self.config_ip)
+        self.ui.roscoreBtn.clicked.connect(self.start_roscore)
+        self.ui.calibrateBtn.clicked.connect(self.calibrate_robot)
+        self.ui.launchdriverBtn.clicked.connect(self.launch_driver)
+        self.ui.launchmoveitBtn_2.clicked.connect(self.launch_moveit)
         
 
         self.ui.pushButton_7.clicked.connect(self.run_half_sphere)
@@ -50,42 +59,10 @@ class ConnectArmWidget(QWidget):
 
     def config(self):
 
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        if pc_ip is None:
-            return self.ui.stackedWidget_3.setCurrentIndex(0)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        if robot_ip is None:
-            return self.ui.stackedWidget_3.setCurrentIndex(0)
-
-        password, ok = QInputDialog.getText(self, "Sudo Password", "Enter your sudo password:", QLineEdit.EchoMode.Password)
-        if not ok or not password:
-            self.ui.output_box.append("Cancelled or no password entered.\n")
-            return self.ui.stackedWidget_3.setCurrentIndex(0)
-
-        self.ui.output_box.append(f"\n>>> Configuring IP for {pc_ip} and pinging {robot_ip}\n")
-
-        command = f"ifconfig enp2s0 {pc_ip} netmask 255.255.255.0 up && ping -c 4 {robot_ip}"
-        full_cmd = f"echo {password} | sudo -S bash -c \"{command}\""
-
-        try:
-            result = subprocess.run(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            self.ui.output_box.append(result.stdout)
-            if result.stderr:
-                self.ui.output_box.append(f"Error:\n{result.stderr}")
-        except Exception as e:
-            self.ui.output_box.append(f"Exception: {str(e)}\n")
-            return
-
         self.ui.stackedWidget_3.setCurrentIndex(5)
         self.ui.pushButton.setChecked(True) 
         
     def roscore(self):
-
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        self.run_command("source /opt/ros/noetic/setup.bash && roscore", "Start ROS Core")
         
 
         self.ui.stackedWidget_3.setCurrentIndex(4)
@@ -93,126 +70,209 @@ class ConnectArmWidget(QWidget):
         
     def calibrate(self):
 
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        if not robot_ip:
-            return
-
-        cmd = f'''
-        cd ~/new_ws && \
-        source /opt/ros/noetic/setup.bash && \
-        source devel/setup.bash && \
-        roslaunch ur_calibration calibration_correction.launch \
-        robot_ip:={robot_ip} \
-        target_filename="$HOME/new_ws/src/Universal_Robots_ROS_Driver/ur_calibration/ur10e_calibration.yaml"
-        '''
-        self.run_command(cmd, "Launch Calibration")
-
         self.ui.stackedWidget_3.setCurrentIndex(3)
         self.ui.pushButton_3.setChecked(True)
         
 
     def driver(self):
-
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        if not robot_ip:
-            return
-
-        cmd = f'''
-        cd ~/new_ws && \
-        source /opt/ros/noetic/setup.bash && \
-        source devel/setup.bash && \
-        roslaunch ur_robot_driver ur10e_bringup.launch robot_ip:={robot_ip}
-        '''
-        self.run_command(cmd, "Launch Robot Driver")
-
         self.ui.stackedWidget_3.setCurrentIndex(2)
         self.ui.pushButton_4.setChecked(True)
         
 
     def moveit(self):
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        cmd = '''
-        cd ~/new_ws && \
-        source /opt/ros/noetic/setup.bash && \
-        source devel/setup.bash && \
-        roslaunch ur10e_moveit_config move_group.launch
-        '''
-        self.run_command(cmd, "Launch MoveIt")
+        
         self.ui.stackedWidget_3.setCurrentIndex(1)
         self.ui.pushButton_5.setChecked(True)
 
    
 
+   
+
+
     def get_full_ip(self, entry_field):
-        ip_address = entry_field.text().strip()
+        try:
+            ip = entry_field.text().strip()
+        except Exception as e:
+            print("Invalid widget passed to get_full_ip:", e)
+            return None
+
+    # Basic IPv4 pattern check
+        ip_pattern = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+        if not re.match(ip_pattern, ip):
+            self.show_ip_error("Invalid IP format. Enter a valid IP like 192.168.1.10.")
+            self.ui.stackedWidget_3.setCurrentIndex(0)
+            self.ui.pushButton.setChecked(False)
+            return None
+
+    # Ensure each octet is in 0–255
+        parts = ip.split(".")
+        if any(not part.isdigit() or not (0 <= int(part) <= 255) for part in parts):
+            self.show_ip_error("Each part of IP must be between 0 and 255.")
+            self.ui.stackedWidget_3.setCurrentIndex(0)
+            self.ui.pushButton.setChecked(False)
+            return None
+
+        return ip
+
+    def show_ip_error(self, message):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Invalid IP Address")
+        msg.setText(message)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+                color: black;
+            }
+            QMessageBox QLabel {
+                background-color: white;
+                color: black;
+            }
+            QMessageBox QPushButton {
+                background-color: #f0f0f0;
+                color: black;
+            }
+        """)
+        msg.exec()
+
+    def show_password_dialog(self):
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Sudo Password")
+        dialog.setLabelText("Enter your sudo password:")
+        dialog.setTextEchoMode(QLineEdit.EchoMode.Password)
+
+        dialog.setStyleSheet("""
+            QInputDialog {
+                background-color: white;
+                color: black;
+            }
+            QLabel {
+                color: black;
+            }
+            QLineEdit {
+                background-color: white;
+                color: black;
+            }
+            QPushButton {
+                background-color: #f0f0f0;
+                color: black;
+            }
+        """)
+
+        ok = dialog.exec()
+        password = dialog.textValue()
+        return password, ok == QDialog.DialogCode.Accepted
+
     
-    # Regex to validate IP address format
-        ip_pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
+    def run_sudo_command(self, command):
+        robot_ip = self.get_full_ip(self.ui.Robot_IP)
+        if not robot_ip:
+            return 
+        if not hasattr(self, 'terminal_3_text_edit'):
+        # Dynamically create QTextEdit widget if not already created
+            self.terminal_3_text_edit = QTextEdit(self.ui.right_main_cointainer)
+            self.terminal_3_text_edit.setObjectName("terminal_3")
+            self.ui.verticalLayout.addWidget(self.terminal_3_text_edit)  # Add to layout
     
-    # Check if IP matches the pattern (three dots and four octets)
-        if not re.match(ip_pattern, ip_address):
-            QMessageBox.warning(self, "Invalid Input", "Invalid IP address format. Ensure there are 3 dots and 4 octets.")
-            return
-    
-    # Split the IP by dots
-        octets = ip_address.split(".")
-    
-    # Validate each octet is in the range of 0-255
-        for octet in octets:
-            if not octet.isdigit() or not (0 <= int(octet) <= 255):
-                QMessageBox.warning(self, "Invalid Input", f"Each octet must be a number between 0 and 255. Invalid octet: {octet}")
-                return
-    
-    # If all checks are passed, return the full IP address
-        return f"192.168.1.{octets[3]}"
+        password, accepted = self.show_password_dialog()
+        if accepted and password:
+                try:
+                    sudo_command = f"echo '{password}' | sudo -S {command}; echo 'Press Enter to close...'; read"
+            
+
+                    proc = subprocess.Popen(
+                        ['gnome-terminal', '--', 'bash', '-c', sudo_command],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    stdout, stderr = proc.communicate(password + '\n')
+
+                    if proc.returncode == 0:
+                        self.terminal_3_text_edit.append("✅ Command succeeded!\n" + stdout)
+                        QTimer.singleShot(4000, lambda : self.run_command("bash robot_control.sh config_ip_2 dummy {robot_ip}; exec bash", "pinging robot ip"))
+                    else:
+                        self.terminal_3_text_edit.append("❌ Command failed!\n" + stderr)
+                except Exception as e:
+                    self.terminal_3_text_edit.append(f"⚡ Exception: {str(e)}")
+        else:
+                self.terminal_3_text_edit.append("⚡ No password entered.")
+
+
 
     def run_command(self, command, title=""):
-        self.ui.terminal_1(f"\n>>> {title or command}\n")
+        
+        if not hasattr(self, 'terminal_3_text_edit'):
+        # Dynamically create QTextEdit widget if not already created
+            self.terminal_3_text_edit = QTextEdit(self.ui.right_main_cointainer)
+            self.terminal_3_text_edit.setObjectName("terminal_3")
+            self.ui.verticalLayout.addWidget(self.terminal_3_text_edit)  # Add to layout
+    
+        self.terminal_3_text_edit.append(f"\n>>> {title or command}\n")  # Append command title
         try:
             subprocess.Popen(
                 ['gnome-terminal', '--', 'bash', '-i', '-c', command],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
-            self.ui.terminal_1(f"{title} launched in new terminal.\n")
+            self.terminal_3_text_edit.append(f"{title} launched in new terminal.\n")  # Log success
         except Exception as e:
-            self.ui.terminal_1(f"Error: {str(e)}\n")
+            self.terminal_3_text_edit.append(f"Error: {str(e)}\n")  # Log errors if any
 
 
     
-        
-       
-    def run_plane(self):
+    
+    
+    
+
+
+   
+    def config_ip(self):
         pc_ip = self.get_full_ip(self.ui.PC_IP)
         robot_ip = self.get_full_ip(self.ui.Robot_IP)
+        if not pc_ip or not robot_ip:
+            return # Prevents execution if validation fails
+        # Ask for sudo password
+        
 
-        cmd = '''
-        cd ~/new_ws && \
-        source /opt/ros/noetic/setup.bash && \
-        source devel/setup.bash && \
-        rosrun ur10e_moveit_config plane.py
-        '''
-        self.run_command(cmd, "Run plane.py")
+        
+        self.show_ip_error(f"\n>>> Configuring IP for {pc_ip} and pinging {robot_ip}\n")
+
+       
+        self.run_sudo_command("bash robot_control.sh config_ip dummy {pc_ip} {robot_ip}")
+        
+
+
+    def start_roscore(self):
+        self.run_command("bash robot_control.sh start_roscore", "Start ROS Core")
+
+
+    def calibrate_robot(self):
+        robot_ip = self.get_full_ip(self.ui.Robot_IP)
+        if not robot_ip:
+            return
+
+        self.run_command(f"bash robot_control.sh calibrate_robot dummy {robot_ip}", "Launch Calibration")
+
+
+    def launch_driver(self):
+        robot_ip = self.get_full_ip(self.ui.Robot_IP)
+        if not robot_ip:
+            return
+
+        self.run_command(f"bash robot_control.sh launch_driver dummy {robot_ip}", "Launch Robot Driver")
+
+        
+    def launch_moveit(self):
+        self.run_command("bash robot_control.sh launch_moveit", "Launch MoveIt")
+
+
+    def run_plane(self):
+        self.run_command("bash robot_control.sh run_plane", "Run plane.py")
 
     def run_half_sphere(self):
-        pc_ip = self.get_full_ip(self.ui.PC_IP)
-        robot_ip = self.get_full_ip(self.ui.Robot_IP)
-
-        cmd = '''
-        cd ~/new_ws && \
-        source /opt/ros/noetic/setup.bash && \
-        source devel/setup.bash && \
-        rosrun ur10e_moveit_config half_sphere.py
-        '''
-        self.run_command(cmd, "Run half_sphere.py")
-
-        
+        self.run_command("bash robot_control.sh run_half_sphere", "Run half_sphere.py")
 
 
 
@@ -273,7 +333,7 @@ class MySideBar(QMainWindow,Ui_MainWindow, Ui_Form):
 
         # Set the target width based on current state
             if current_width == 50:
-                new_width = 212  # expanded
+                new_width = 228  # expanded
             else:
                 new_width = 50   # collapsed
 
@@ -294,15 +354,3 @@ class MySideBar(QMainWindow,Ui_MainWindow, Ui_Form):
 
             
             self.stackedWidget_2.setCurrentIndex(index)
-
-        
-
-          
-       
-
-
-
-
-
-             
-            
